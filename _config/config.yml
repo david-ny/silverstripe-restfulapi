@@ -1,12 +1,12 @@
 ---
-Name: restfulapi
-After: 'framework/*','cms/*'
+# Name: restfulapi
+# After: 'framework/*','cms/*'
 ---
 # ---------------------------------
 # Routing
-Director:
-  rules:
-    'api': 'RESTfulAPI'
+# Director:
+  # rules:
+    # 'api': 'RESTfulAPI'
 # ---------------------------------
 # Permissions / Uncomment or create your own
 #Group:
