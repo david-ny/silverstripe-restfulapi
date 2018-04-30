@@ -1,13 +1,25 @@
 <?php
+
+// use SilverStripe\Core\Config\Configurable;
+use SilverStripe\Core\Config\Config;
+use SilverStripe\Control\HTTPRequest;
+use SilverStripe\Security\Member;
+use SilverStripe\Security\MemberAuthenticator\MemberAuthenticator;
+use SilverStripe\Core\Injector\Injector;
+use SilverStripe\Security\RandomGenerator;
+use SilverStripe\Security\PasswordEncryptor;
+use SilverStripe\Core\Convert;
+use SilverStripe\ORM\DataObject;
+use SilverStripe\Security\Security;
 /**
  * RESTfulAPI Token authenticator
  * handles login, logout and request authentication via token
- * 
+ *
  * @author  Thierry Francois @colymba thierry@colymba.com
  * @copyright Copyright (c) 2013, Thierry Francois
- * 
+ *
  * @license http://opensource.org/licenses/BSD-3-Clause BSD Simplified
- * 
+ *
  * @package RESTfulAPI
  * @subpackage Authentication
  */
@@ -16,7 +28,7 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
 
     /**
    * Authentication token life in seconds
-   * 
+   *
    * @var integer
    * @config
    */
@@ -25,7 +37,7 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
 
   /**
    * HTTP Header name storing authentication token
-   * 
+   *
    * @var string
    * @config
    */
@@ -34,7 +46,7 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
 
   /**
    * Fallback GET/POST HTTP query var storing authentication token
-   * 
+   *
    * @var string
    * @config
    */
@@ -43,11 +55,12 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
 
   /**
    * Class name to query for token validation
-   * 
+   *
    * @var string
    * @config
    */
-  private static $tokenOwnerClass = 'Member';
+  // private static $tokenOwnerClass = 'Member::class';
+  private static $tokenOwnerClass = 'SilverStripe\Security\Member';
 
 
   /**
@@ -64,7 +77,7 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
   /**
    * Stores current token authentication configurations
    * header, var, class, db columns....
-   * 
+   *
    * @var array
    */
   protected $tokenConfig;
@@ -78,7 +91,7 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
 
   /**
    * List of URL accessible actions
-   * 
+   *
    * @var array
    */
   private static $allowed_actions = array(
@@ -94,6 +107,7 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
   public function __construct()
   {
       $config = array();
+      // $configInstance = Configurable::config();
       $configInstance = Config::inst();
 
       $config['life']         = $configInstance->get('RESTfulAPI_TokenAuthenticator', 'tokenLife');
@@ -126,24 +140,28 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
    * Login a user into the Framework and generates API token
    * Only works if the token owner is a Member
    *
-   * @param  SS_HTTPRequest   $request  HTTP request containing 'email' & 'pwd' vars
+   * @param  HTTPRequest   $request  HTTP request containing 'email' & 'pwd' vars
    * @return array                      login result with token
    */
-  public function login(SS_HTTPRequest $request)
+  public function login(HTTPRequest $request)
   {
       $response = array();
 
-      if ($this->tokenConfig['owner'] === 'Member') {
+      if ($this->tokenConfig['owner'] === 'SilverStripe\Security\Member') {
           $email    = $request->requestVar('email');
           $pwd      = $request->requestVar('pwd');
           $member   = false;
-      
+
 
           if ($email && $pwd) {
-              $member = MemberAuthenticator::authenticate(array(
-          'Email'    => $email,
-          'Password' => $pwd
-        ));
+              $memberAuthenticator = Injector::inst()->get('SilverStripe\Security\MemberAuthenticator\MemberAuthenticator');
+              $member = $memberAuthenticator->authenticate([
+                  'Email'    => $email,
+                  'Password' => $pwd
+                ]
+                ,
+                $request
+              );
               if ($member) {
                   $tokenData = $this->generateToken();
 
@@ -153,10 +171,11 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
                   $member->{$tokenDBColumn}  = $tokenData['token'];
                   $member->{$expireDBColumn} = $tokenData['expire'];
                   $member->write();
-                  $member->login();
+                  // $member->login();
+                  Security::setCurrentUser($member);
               }
           }
-      
+
           if (!$member) {
               $response['result']  = false;
               $response['message'] = 'Authentication fail.';
@@ -179,10 +198,10 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
    * Logout a user from framework
    * and update token with an expired one
    * if token owner class is a Member
-   * 
-   * @param  SS_HTTPRequest   $request    HTTP request containing 'email' var
+   *
+   * @param  HTTPRequest   $request    HTTP request containing 'email' var
    */
-  public function logout(SS_HTTPRequest $request)
+  public function logout(HTTPRequest $request)
   {
       $email = $request->requestVar('email');
       $member = Member::get()->filter(array('Email' => $email))->first();
@@ -191,7 +210,7 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
           //logout
       $member->logout();
 
-          if ($this->tokenConfig['owner'] === 'Member') {
+          if ($this->tokenConfig['owner'] === 'SilverStripe\Security\Member') {
               //generate expired token
         $tokenData = $this->generateToken(true);
 
@@ -209,14 +228,14 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
 
   /**
    * Sends password recovery email
-   * 
-   * @param  SS_HTTPRequest   $request    HTTP request containing 'email' vars
+   *
+   * @param  HTTPRequest   $request    HTTP request containing 'email' vars
    * @return array                        'email' => false if email fails (Member doesn't exist will not be reported)
    */
-  public function lostPassword(SS_HTTPRequest $request)
+  public function lostPassword(HTTPRequest $request)
   {
       $email = Convert::raw2sql($request->requestVar('email'));
-      $member = DataObject::get_one('Member', "\"Email\" = '{$email}'");
+      $member = DataObject::get_one('SilverStripe\Security\Member', "\"Email\" = '{$email}'");
 
       if ($member) {
           $token = $member->generateAutologinTokenAndStoreHash();
@@ -236,7 +255,7 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
 
   /**
    * Return the stored API token for a specific owner
-   * 
+   *
    * @param  integer $id ID of the token owner
    * @return string      API token for the owner
    */
@@ -261,7 +280,7 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
   /**
    * Reset an owner's token
    * if $expired is set to true the owner's will have a new invalidated/expired token
-   * 
+   *
    * @param  integer $id      ID of the token owner
    * @param  boolean $expired if true the token will be invalidated
    */
@@ -294,7 +313,7 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
   /**
    * Generates an encrypted random token
    * and an expiry date
-   * 
+   *
    * @param  boolean $expired Set to true to generate an outdated token
    * @return array            token data array('token' => HASH, 'expire' => EXPIRY_DATE)
    */
@@ -307,7 +326,7 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
       } else {
           $expire = time() - ($life * 2);
       }
-    
+
       $generator = new RandomGenerator();
       $tokenString = $generator->randomToken();
 
@@ -325,11 +344,11 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
   /**
    * Returns the DataObject related to the token
    * that sent the authenticated request
-   * 
-   * @param  SS_HTTPRequest          $request    HTTP API request
+   *
+   * @param  HTTPRequest          $request    HTTP API request
    * @return null|DataObject                     null if failed or the DataObject token owner related to the request
    */
-  public function getOwner(SS_HTTPRequest $request)
+  public function getOwner(HTTPRequest $request)
   {
       $owner = null;
 
@@ -341,8 +360,8 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
 
       if ($token) {
           $SQL_token = Convert::raw2sql($token);
-      
           $owner = DataObject::get_one(
+        // 'SilverStripe\Security\Member',
         $this->tokenConfig['owner'],
         "\"".$this->tokenConfig['DBColumn']."\"='" . $SQL_token . "'",
         false
@@ -360,11 +379,11 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
   /**
    * Checks if a request to the API is authenticated
    * Gets API Token from HTTP Request and return Auth result
-   * 
-   * @param  SS_HTTPRequest           $request    HTTP API request
+   *
+   * @param  HTTPRequest           $request    HTTP API request
    * @return true|RESTfulAPI_Error                True if token is valid OR RESTfulAPI_Error with details
    */
-  public function authenticate(SS_HTTPRequest $request)
+  public function authenticate(HTTPRequest $request)
   {
       //get the token
     $token = $request->getHeader($this->tokenConfig['header']);
@@ -386,11 +405,11 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
       );
       }
   }
-  
+
 
   /**
    * Validate the API token
-   * 
+   *
    * @param  string                 $token    Authentication token
    * @return true|RESTfulAPI_Error            True if token is valid OR RESTfulAPI_Error with details
    */
@@ -419,7 +438,7 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
             $tokenOwner->write();
         }
         //all good, log Member in
-        if (is_a($tokenOwner, 'Member')) {
+        if (is_a($tokenOwner, 'SilverStripe\Security\Member')) {
             # $tokenOwner->logIn();
             # this is a login without the logging
             $tokenOwner::session_regenerate_id();
@@ -428,7 +447,7 @@ class RESTfulAPI_TokenAuthenticator implements RESTfulAPI_Authenticator
 
               return true;
           } else {
-              //too old        
+              //too old
         return new RESTfulAPI_Error(403,
           'Token expired.',
           array(

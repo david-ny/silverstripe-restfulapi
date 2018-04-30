@@ -91,10 +91,10 @@ class RESTfulAPI_DefaultQueryHandler implements RESTfulAPI_QueryHandler
   /**
    * All requests pass through here and are redirected depending on HTTP verb and params
    * 
-   * @param  SS_HTTPRequest        $request    HTTP request
+   * @param  HTTPRequest        $request    HTTP request
    * @return DataObjec|DataList                DataObject/DataList result or stdClass on error
    */
-  public function handleQuery(SS_HTTPRequest $request)
+  public function handleQuery(HTTPRequest $request)
   {
       //get requested model(s) details
     $model       = $request->param('ClassName');
@@ -226,10 +226,10 @@ class RESTfulAPI_DefaultQueryHandler implements RESTfulAPI_QueryHandler
    * @param  string                 $model          Model(s) class to find
    * @param  boolean|integr         $id             The ID of the model to find or false
    * @param  array                  $queryParams    Query parameters and modifiers
-   * @param  SS_HTTPRequest         $request        The original HTTP request
+   * @param  HTTPRequest         $request        The original HTTP request
    * @return DataObject|DataList                    Result of the search (note: DataList can be empty) 
    */
-  public function findModel($model, $id = false, $queryParams, SS_HTTPRequest $request)
+  public function findModel($model, $id = false, $queryParams, HTTPRequest $request)
   {
       if ($id) {
           $return = DataObject::get_by_id($model, $id);
@@ -312,10 +312,10 @@ class RESTfulAPI_DefaultQueryHandler implements RESTfulAPI_QueryHandler
    * Create object of class $model
    * 
    * @param  string         $model
-   * @param  SS_HTTPRequest $request
+   * @param  HTTPRequest $request
    * @return DataObject
    */
-  public function createModel($model, SS_HTTPRequest $request)
+  public function createModel($model, HTTPRequest $request)
   {
       if (!RESTfulAPI::api_access_control($model, $request->httpMethod())) {
           return new RESTfulAPI_Error(403,
@@ -334,7 +334,7 @@ class RESTfulAPI_DefaultQueryHandler implements RESTfulAPI_QueryHandler
    *
    * @param String|DataObject $model the model or class to update
    * @param Integer $id The ID of the model to update
-   * @param SS_HTTPRequest the original request
+   * @param HTTPRequest the original request
    *
    * @return DataObject The updated model 
    */
@@ -460,10 +460,10 @@ class RESTfulAPI_DefaultQueryHandler implements RESTfulAPI_QueryHandler
    * 
    * @param  string          $model     Model class
    * @param  integer 				 $id        Model ID
-   * @param  SS_HTTPRequest  $request   Model ID
+   * @param  HTTPRequest  $request   Model ID
    * @return NULL|array                 NULL if successful or array with error detail              
    */
-  public function deleteModel($model, $id, SS_HTTPRequest $request)
+  public function deleteModel($model, $id, HTTPRequest $request)
   {
       if ($id) {
           $object = DataObject::get_by_id($model, $id);

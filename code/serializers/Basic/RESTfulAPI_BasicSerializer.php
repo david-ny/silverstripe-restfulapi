@@ -1,4 +1,5 @@
 <?php
+use SilverStripe\Core\Config\Config;
 /**
  * Basic RESTfulAPI Model Serializer
  * handles DataObject, DataList etc.. JSON serialization and de-serialization
